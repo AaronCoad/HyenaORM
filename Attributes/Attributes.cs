@@ -20,7 +20,6 @@ namespace HyenaORM.Attributes
     {
         public string Name { get; set; }
 
-        // This is a positional argument
         public FieldNameAttribute(string name)
         {
             this.Name = name;

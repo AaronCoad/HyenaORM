@@ -6,6 +6,7 @@ using System.Collections;
 using System.Reflection;
 using System.Linq;
 using System.Data;
+using System.Threading.Tasks;
 using HyenaORM.Attributes;
 
 namespace HyenaORM
@@ -24,7 +25,7 @@ namespace HyenaORM
 
         // Return an IEnumerable of the type based on data.
         // This method uses reflection to identify the fields we are interested in and the appropriate table.
-        public static IEnumerable<T> GetAll<T>()
+        public static async Task<IEnumerable<T>> GetAll<T>()
         {
             List<T> results = new List<T>();
             Type type = typeof(T);
@@ -37,7 +38,7 @@ namespace HyenaORM
             }
 
             // Get all the properties with a field name.
-            PropertyInfo[] propertyInfos = type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.GetCustomAttribute<FieldNameAttribute>() != null).ToArray();
+            PropertyInfo[] propertyInfos = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Where(x => x.GetCustomAttribute<FieldNameAttribute>() != null).ToArray();
 
             // Throw an exception if there are no properties with a field name.
             if (propertyInfos.Count() == 0)
@@ -54,9 +55,9 @@ namespace HyenaORM
             using(SqlCommand cmd = new SqlConnection(ConnectionString).CreateCommand())
             {
                 cmd.CommandText = String.Format("Select {0} from {1}", String.Join(",",fieldNames.ToArray()), type.GetCustomAttribute<TableNameAttribute>().Name);
-                cmd.Connection.Open();
+                await cmd.Connection.OpenAsync();
 
-                SqlDataReader reader = cmd.ExecuteReader();
+                SqlDataReader reader = await cmd.ExecuteReaderAsync();
 
                 while (reader.Read())
                 {
@@ -67,11 +68,12 @@ namespace HyenaORM
                         foreach(var prop in propertyInfos)
                         {
                             int pos = reader.GetOrdinal(prop.GetCustomAttribute<FieldNameAttribute>().Name);
-
+                            object value = reader.GetValue(pos);
                             // If the returned column isn't null then we set the value.
-                            if (!reader.IsDBNull(pos))
+
+                            if (value != DBNull.Value)
                             {
-                                prop.SetValue(item, reader.GetValue(pos));
+                                prop.SetValue(item, value);
                             }
                         }
 
@@ -83,7 +85,7 @@ namespace HyenaORM
             return results;
         }
 
-        public static T GetRecordByPrimaryKey<T>(object primaryKeyValue)
+        public static async Task<T> GetRecordByPrimaryKey<T>(object primaryKeyValue)
         {
             T result = (T)typeof(T).GetConstructor(Type.EmptyTypes).Invoke(null);
             Type type = typeof(T);
@@ -96,7 +98,7 @@ namespace HyenaORM
             }
 
             // Get all the properties with a field name.
-            PropertyInfo[] propertyInfos = type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.GetCustomAttribute<FieldNameAttribute>() != null).ToArray();
+            PropertyInfo[] propertyInfos = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Where(x => x.GetCustomAttribute<FieldNameAttribute>() != null).ToArray();
 
             // Throw an exception if there are no properties with a field name.
             if (propertyInfos.Count() == 0)
@@ -133,9 +135,9 @@ namespace HyenaORM
                     Value = primaryKeyValue
                 });
 
-                cmd.Connection.Open();
+                await cmd.Connection.OpenAsync();
 
-                SqlDataReader reader = cmd.ExecuteReader();
+                SqlDataReader reader = await cmd.ExecuteReaderAsync();
 
                 while (reader.Read())
                 {
@@ -144,11 +146,12 @@ namespace HyenaORM
                         foreach (var prop in propertyInfos)
                         {
                             int pos = reader.GetOrdinal(prop.GetCustomAttribute<FieldNameAttribute>().Name);
-
+                            object value = reader.GetValue(pos);
                             // If the returned column isn't null then we set the value.
-                            if (!reader.IsDBNull(pos))
+
+                            if (value != DBNull.Value)
                             {
-                                prop.SetValue(result, reader.GetValue(pos));
+                                prop.SetValue(result, value);
                             }
                         }
                     }
