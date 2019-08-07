@@ -7,17 +7,46 @@ using System.Linq;
 using System.Data;
 using System.Threading.Tasks;
 using HyenaORM.Attributes;
+using Microsoft.Extensions.Configuration;
 
 namespace HyenaORM
 {
     // Currently only supports a single database.
     // Should eventually have the option of supporting multiple databases in one project.
-    public static class Database
+    public class MssqlDatabase : Interfaces.IDatabase
     {
-        private static string ConnectionString { get; set; }
+        public MssqlDatabase(string connectionstring)
+        {
+            ConnectionString = connectionstring;
+        }
+
+        public string ConnectionString { get; }
+
+        public MssqlDatabase(IConfiguration configuration)
+        {
+            ConnectionString = ConnectionStringFromConfigurationSection(configuration.GetSection("HyenaORM"));
+        }
+
+        public MssqlDatabase(IConfigurationSection configurationSection)
+        {
+            ConnectionString = ConnectionStringFromConfigurationSection(configurationSection);
+        }
+
+        private string ConnectionStringFromConfigurationSection(IConfigurationSection section)
+        {
+            return new SqlConnectionStringBuilder()
+                {
+                    DataSource = section.GetValue<string>("Server"),
+                    InitialCatalog = section.GetValue<string>("Database"),
+                    IntegratedSecurity = section.GetValue<bool>("OSAuth", false),
+                    UserID = section.GetValue<string>("Username"),
+                    Password = section.GetValue<string>("Password"),
+                    MultipleActiveResultSets = section.GetValue<bool>("MultipleResultSets", true)
+                }.ToString();
+        }
 
         // Get the Primary Key field name
-        private static string GetPrimaryKeyFieldName(PropertyInfo[] propertyInfos)
+        protected string GetPrimaryKeyFieldName(PropertyInfo[] propertyInfos)
         {
             foreach(var prop in propertyInfos)
             {
@@ -31,7 +60,7 @@ namespace HyenaORM
         }
 
         // Validate whether the appropriate attributes are assigned
-        private static bool GetValidationErrors(Type type, bool includePKCheck, out string exceptionMessage)
+        protected bool GetValidationErrors(Type type, bool includePKCheck, out string exceptionMessage)
         {
             exceptionMessage = "";
             PropertyInfo[] propertyInfos = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Where(x => x.GetCustomAttribute<FieldNameAttribute>() != null).ToArray();
@@ -62,14 +91,8 @@ namespace HyenaORM
             return !String.IsNullOrWhiteSpace(exceptionMessage);
         }
 
-        // Initialise the connection string
-        public static void Init(string connectionString)
-        {
-            ConnectionString = connectionString;
-        }
-
         // Return an IEnumerable of the type.
-        public static async Task<IEnumerable<T>> GetAll<T>()
+        public async Task<IEnumerable<T>> LoadAllRecords<T>()
         {
             string message = "";
 
@@ -137,7 +160,7 @@ namespace HyenaORM
         }
 
         // Return a single record of the type.
-        public static async Task<T> GetRecordByPrimaryKey<T>(object primaryKeyValue)
+        public async Task<T> LoadRecordByPrimaryKey<T>(object primaryKey)
         {
             string message = "";
 
@@ -169,7 +192,7 @@ namespace HyenaORM
                 cmd.Parameters.Add(new SqlParameter()
                 {
                     ParameterName = String.Format("@{0}", primaryKeyName),
-                    Value = primaryKeyValue
+                    Value = primaryKey
                 });
 
                 try
