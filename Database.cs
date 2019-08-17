@@ -121,7 +121,7 @@ namespace HyenaORM
                 {
                     await cmd.Connection.OpenAsync();
 
-                    SqlDataReader reader = await cmd.ExecuteReaderAsync();
+                    SqlDataReader reader = await cmd.ExecuteReaderAsync(CommandBehavior.SequentialAccess);
 
                     while (reader.Read())
                     {
@@ -131,6 +131,7 @@ namespace HyenaORM
 
                             foreach (var prop in propertyInfos)
                             {
+
                                 int pos = reader.GetOrdinal(prop.GetCustomAttribute<FieldNameAttribute>().Name);
                                 object value = reader.GetValue(pos);
                                 
@@ -199,7 +200,7 @@ namespace HyenaORM
                 {
                     await cmd.Connection.OpenAsync();
 
-                    SqlDataReader reader = await cmd.ExecuteReaderAsync();
+                    SqlDataReader reader = await cmd.ExecuteReaderAsync(CommandBehavior.SequentialAccess);
 
                     while (reader.Read())
                     {
