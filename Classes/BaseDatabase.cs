@@ -107,9 +107,9 @@ namespace HyenaORM.Classes
                     }
                     cmd.Connection.Close();
                 }
-                catch (Exception ex)
+                catch
                 {
-                    throw ex;
+                    throw;
                 }
                 finally
                 {
@@ -168,9 +168,8 @@ namespace HyenaORM.Classes
                             result = CreateObjectFromReader<T>(reader, propertyInfos, constructorInfo);
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    throw ex;
                 }
                 finally
                 {
