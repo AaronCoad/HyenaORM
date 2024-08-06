@@ -7,6 +7,7 @@ using System.Data.SqlClient;
 using System.Reflection;
 using HyenaORM.Attributes;
 using System.Linq;
+using HyenaORM.Exceptions;
 
 namespace HyenaORM.Classes
 {
@@ -14,10 +15,6 @@ namespace HyenaORM.Classes
     {
         #region Fields and Properties
         private string _connectionString = "";
-        private BindingFlags _bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-        protected string _missingFieldNamesException = @"{0} has no properties with the FieldName attribute.";
-        protected string _missingTableNameException = @"{0} is missing the TableName attribute.";
-        protected string _missingConstructorException = @"{0} is missing a parameterless constructor.";
         protected string _missingPrimaryKeyException = @"{0} is missing a primary key.";
         protected string _parameterPrefix;
         #endregion
@@ -29,9 +26,8 @@ namespace HyenaORM.Classes
         #endregion
 
         #region Methods
-        private bool CheckFieldNameExpression(PropertyInfo x) => x.GetCustomAttribute<FieldNameAttribute>() != null;
-        private string ConnectionStringFromConfigurationSection(IConfigurationSection section) => 
-            new SqlConnectionStringBuilder 
+        private string ConnectionStringFromConfigurationSection(IConfigurationSection section) =>
+            new SqlConnectionStringBuilder
             {
                 DataSource = section.GetValue<string>("Server"),
                 InitialCatalog = section.GetValue<string>("Database"),
@@ -52,15 +48,9 @@ namespace HyenaORM.Classes
 
             return "";
         }
-        protected PropertyInfo[] GetFieldNamesFromProperties(Type type) => type.GetProperties(_bindingFlags).Where(CheckFieldNameExpression).ToArray();
-        protected string GetTableNameFromProperties(Type type)
-        {
-            return type != null && type.GetCustomAttribute<TableNameAttribute>() != null
-                ? type.GetCustomAttribute<TableNameAttribute>().Name
-                : "";
-        }
+
         private void SetConnectionString(string connectionString) => _connectionString = connectionString;
-        private string GetCommandText(PropertyInfo[] propertyInfos, string tableName) => 
+        private string GetCommandText(PropertyInfo[] propertyInfos, string tableName) =>
             string.Format("Select {0} from {1}",
                 String.Join(",", propertyInfos.Select(x => x.GetCustomAttribute<FieldNameAttribute>().Name).ToArray()),
                 tableName);
@@ -85,18 +75,18 @@ namespace HyenaORM.Classes
         public async Task<IEnumerable<T>> LoadAllRecords<T>()
         {
             Type type = typeof(T);
-            PropertyInfo[] propertyInfos = GetFieldNamesFromProperties(type);
-            string tableName = GetTableNameFromProperties(type);
+            PropertyInfo[] propertyInfos = type.GetFieldNamesFromProperties();
+            string tableName = type.GetTableNameForType();
             ConstructorInfo constructorInfo = type.GetConstructor(Type.EmptyTypes);
 
             if (propertyInfos != null && !propertyInfos.Any())
-                throw new Exception(string.Format(_missingFieldNamesException, type.Name));
+                throw new MissingFieldNamesException(type);
 
             if (string.IsNullOrWhiteSpace(tableName))
-                throw new Exception(string.Format(_missingTableNameException, type.Name));
+                throw new MissingTableNameException(type);
 
             if (constructorInfo == null)
-                throw new Exception(string.Format(_missingConstructorException, type.Name));
+                throw new MissingConstructorException(type);
 
             List<T> results = new List<T>();
 
@@ -113,7 +103,7 @@ namespace HyenaORM.Classes
                     while (reader.Read())
                     {
                         if (reader.HasRows)
-                            results.Add(CreateObjectFromReader<T>(reader,propertyInfos,constructorInfo));
+                            results.Add(CreateObjectFromReader<T>(reader, propertyInfos, constructorInfo));
                     }
                     cmd.Connection.Close();
                 }
@@ -135,29 +125,29 @@ namespace HyenaORM.Classes
         {
             T result;
             Type type = typeof(T);
-            PropertyInfo[] propertyInfos = GetFieldNamesFromProperties(type);
-            string tableName = GetTableNameFromProperties(type);
+            PropertyInfo[] propertyInfos = type.GetFieldNamesFromProperties();
+            string tableName = type.GetTableNameForType();
             string primaryKeyName = GetPrimaryKeyFieldName(propertyInfos);
             ConstructorInfo constructorInfo = type.GetConstructor(Type.EmptyTypes);
 
             if (propertyInfos != null && !propertyInfos.Any())
-                throw new Exception(string.Format(_missingFieldNamesException, type.Name));
+                throw new MissingFieldNamesException(type);
 
             if (string.IsNullOrWhiteSpace(primaryKeyName))
                 throw new Exception(string.Format(_missingPrimaryKeyException, type.Name));
 
             if (string.IsNullOrWhiteSpace(tableName))
-                throw new Exception(string.Format(_missingTableNameException, type.Name));
+                throw new MissingTableNameException(type);
 
             if (constructorInfo == null)
-                throw new Exception(string.Format(_missingConstructorException, type.Name));
+                throw new MissingConstructorException(type);
 
             result = (T)constructorInfo.Invoke(parameters: null);
 
             using (SqlCommand cmd = new SqlConnection(connectionString: _connectionString).CreateCommand())
             {
                 cmd.CommandText = String.Format(format: "{0} where {1} = @{1}",
-                                                arg0: GetCommandText(propertyInfos,tableName),
+                                                arg0: GetCommandText(propertyInfos, tableName),
                                                 arg1: primaryKeyName);
 
                 cmd.Parameters.Add(value: new SqlParameter
