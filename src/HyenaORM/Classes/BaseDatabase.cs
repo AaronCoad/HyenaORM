@@ -15,7 +15,6 @@ namespace HyenaORM.Classes
     {
         #region Fields and Properties
         private string _connectionString = "";
-        protected string _missingPrimaryKeyException = @"{0} is missing a primary key.";
         protected string _parameterPrefix;
         #endregion
 
@@ -127,14 +126,14 @@ namespace HyenaORM.Classes
             Type type = typeof(T);
             PropertyInfo[] propertyInfos = type.GetFieldNamesFromProperties();
             string tableName = type.GetTableNameForType();
-            string primaryKeyName = GetPrimaryKeyFieldName(propertyInfos);
+            string primaryKeyName = propertyInfos.GetPrimaryKeyFieldName();
             ConstructorInfo constructorInfo = type.GetConstructor(Type.EmptyTypes);
 
             if (propertyInfos != null && !propertyInfos.Any())
                 throw new MissingFieldNamesException(type);
 
             if (string.IsNullOrWhiteSpace(primaryKeyName))
-                throw new Exception(string.Format(_missingPrimaryKeyException, type.Name));
+                throw new HyenaORM.Exceptions.MissingPrimaryKeyException(type);
 
             if (string.IsNullOrWhiteSpace(tableName))
                 throw new MissingTableNameException(type);
